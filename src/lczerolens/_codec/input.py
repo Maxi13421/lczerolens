@@ -22,8 +22,10 @@ def encode_input(
     board: chess.Board,
     *,
     input_format: InputFormat = InputFormat.CLASSICAL_112,
+    swap_colors : bool
 ) -> torch.Tensor:
     """Encode ``board`` as one Lczero ``[112, 8, 8]`` input tensor.
+    if swap_colors, it always tells the model white to move
 
     The caller's board and move stack are never mutated.  History-sensitive
     formats operate on a private full-stack copy.
@@ -59,7 +61,7 @@ def encode_input(
         encoded[106].fill_(1)
     if board.has_kingside_castling_rights(them):
         encoded[107].fill_(1)
-    if us == chess.BLACK:
+    if us == chess.BLACK and not swap_colors:
         encoded[108].fill_(1)
     encoded[109].fill_(board.halfmove_clock)
     encoded[111].fill_(1)

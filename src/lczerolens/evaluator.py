@@ -72,10 +72,10 @@ class LczeroEvaluator:
         """Device of the wrapped neural module."""
         return self.model.device
 
-    def prepare(self, boards: Sequence[chess.Board]) -> TensorDict:
+    def prepare(self, boards: Sequence[chess.Board], swap_colors : bool) -> TensorDict:
         """Encode a non-empty position batch as the canonical input TensorDict."""
         resolved = _validate_boards(boards)
-        planes = torch.stack([encode_input(board, input_format=self.input_format) for board in resolved]).to(
+        planes = torch.stack([encode_input(board, input_format=self.input_format, swap_colors=swap_colors) for board in resolved]).to(
             self.device
         )
         masks = torch.stack([legal_mask(board) for board in resolved]).to(self.device)
@@ -85,7 +85,7 @@ class LczeroEvaluator:
             device=self.device,
         )
 
-    def finish(self, boards: Sequence[chess.Board], tensors: TensorDictBase) -> EvaluationBatch:
+    def finish(self, boards: Sequence[chess.Board], tensors: TensorDictBase, swap_colors : bool) -> EvaluationBatch:
         """Validate and standardize network heads without discarding added keys."""
         resolved = _validate_boards(boards)
         if not isinstance(tensors, TensorDictBase):
@@ -116,7 +116,7 @@ class LczeroEvaluator:
         expected_masks = torch.stack([legal_mask(board) for board in resolved]).to(tensors.device)
         if not torch.equal(tensors[LczeroKeys.INPUT_LEGAL_MASK], expected_masks):
             raise ValueError("input/legal_mask does not match the supplied positions.")
-        expected_planes = torch.stack([encode_input(board, input_format=self.input_format) for board in resolved]).to(
+        expected_planes = torch.stack([encode_input(board, input_format=self.input_format, swap_colors=swap_colors) for board in resolved]).to(
             tensors.device
         )
         if not torch.equal(tensors[LczeroKeys.INPUT_PLANES], expected_planes):
@@ -167,18 +167,19 @@ class LczeroEvaluator:
         return EvaluationBatch(resolved, tensors, self.provenance, self.input_format.value)
 
     @overload
-    def evaluate(self, boards: chess.Board, /) -> Evaluation: ...
+    def evaluate(self, boards: chess.Board, swap_colors : bool = False, /) -> Evaluation: ...
 
     @overload
-    def evaluate(self, boards: Iterable[chess.Board], /) -> EvaluationBatch: ...
+    def evaluate(self, boards: Iterable[chess.Board], swap_colors : bool = False, /) -> EvaluationBatch: ...
 
-    def evaluate(self, boards: chess.Board | Iterable[chess.Board], /) -> Evaluation | EvaluationBatch:
-        """Evaluate one position or a batch through the canonical TensorDict path."""
+    def evaluate(self, boards: chess.Board | Iterable[chess.Board], swap_colors : bool = False, /) -> Evaluation | EvaluationBatch:
+        """Evaluate one position or a batch through the canonical TensorDict path.
+        if swap_colors, it always tells the model white to move"""
         single = isinstance(boards, chess.Board)
         resolved = (boards,) if single else tuple(boards)
-        tensors = self.prepare(resolved)
+        tensors = self.prepare(resolved, swap_colors=swap_colors)
         tensors = self.model(tensors)
-        batch = self.finish(resolved, tensors)
+        batch = self.finish(resolved, tensors, swap_colors=swap_colors)
         return batch[0] if single else batch
 
 
