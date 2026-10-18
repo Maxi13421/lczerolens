@@ -69,8 +69,11 @@ class LczeroEvaluator:
 
     @property
     def device(self) -> torch.device:
-        """Device of the wrapped neural module."""
-        return self.model.device
+        for parameter in self.model.parameters():
+            return parameter.device
+        for buffer in self.model.buffers():
+            return buffer.device
+        return torch.device("cpu")
 
     def prepare(self, boards: Sequence[chess.Board], swap_colors : bool) -> TensorDict:
         """Encode a non-empty position batch as the canonical input TensorDict."""
